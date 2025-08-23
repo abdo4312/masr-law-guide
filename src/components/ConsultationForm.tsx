@@ -6,11 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, MessageSquare, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const ConsultationForm = () => {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [analysis, setAnalysis] = useState("");
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,17 +27,33 @@ const ConsultationForm = () => {
     }
 
     setIsLoading(true);
+    setAnalysis("");
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: "تم إرسال الاستشارة",
-        description: "سيتم الرد عليك خلال دقائق معدودة"
+    try {
+      const { data, error } = await supabase.functions.invoke('legal-analysis', {
+        body: { query: query.trim(), category }
       });
-      setQuery("");
-      setCategory("");
-    }, 2000);
+
+      if (error) {
+        throw error;
+      }
+
+      setAnalysis(data.analysis);
+      toast({
+        title: "تم تحليل الاستشارة القانونية",
+        description: "تم إنتاج التحليل القانوني بنجاح"
+      });
+
+    } catch (error) {
+      console.error('Error getting legal analysis:', error);
+      toast({
+        title: "خطأ في التحليل",
+        description: "حدث خطأ أثناء تحليل الاستشارة القانونية",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -173,6 +191,22 @@ const ConsultationForm = () => {
                 </p>
               </div>
             </Card>
+
+            {/* Legal Analysis Results */}
+            {analysis && (
+              <Card className="lg:col-span-3 p-8 mt-8">
+                <div className="flex items-center gap-3 mb-6">
+                  <MessageSquare className="w-6 h-6 text-legal-primary" />
+                  <h3 className="text-2xl font-semibold">التحليل القانوني</h3>
+                </div>
+                
+                <div className="prose prose-lg max-w-none text-right" dir="rtl">
+                  <div className="whitespace-pre-line text-foreground leading-relaxed">
+                    {analysis}
+                  </div>
+                </div>
+              </Card>
+            )}
           </div>
         </div>
       </div>

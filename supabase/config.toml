@@ -1,1 +1,4 @@
 project_id = "piqvvcdhmhmiamzlucgt"
+
+[functions.legal-analysis]
+verify_jwt = false
