@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Upload, MessageSquare, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import TextToSpeech from "./TextToSpeech";
 
 const ConsultationForm = () => {
   const [query, setQuery] = useState("");
@@ -195,9 +196,12 @@ const ConsultationForm = () => {
             {/* Legal Analysis Results */}
             {analysis && (
               <Card className="lg:col-span-3 p-8 mt-8">
-                <div className="flex items-center gap-3 mb-6">
-                  <MessageSquare className="w-6 h-6 text-legal-primary" />
-                  <h3 className="text-2xl font-semibold">التحليل القانوني</h3>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="w-6 h-6 text-legal-primary" />
+                    <h3 className="text-2xl font-semibold">التحليل القانوني</h3>
+                  </div>
+                  <TextToSpeech text={analysis} />
                 </div>
                 
                 <div className="prose prose-lg max-w-none text-right" dir="rtl">
