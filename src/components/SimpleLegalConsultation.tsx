@@ -2,14 +2,20 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Mic, Plus, Send, Volume2, Square } from "lucide-react";
+import { Mic, Plus, Send, Volume2, Square, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
 
 const SimpleLegalConsultation = () => {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [analysis, setAnalysis] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -26,26 +32,45 @@ const SimpleLegalConsultation = () => {
       return;
     }
 
+    const userMessage: Message = {
+      role: 'user',
+      content: query,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setQuery("");
     setIsLoading(true);
-    setAnalysis("");
     setAudioUrl("");
     setIsPlaying(false);
     
     try {
-      // Auto-detect legal category based on keywords
+      // Auto-detect legal category
       const category = detectLegalCategory(query);
       
+      // Prepare conversation history
+      const conversationHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
       const { data, error } = await supabase.functions.invoke('legal-analysis', {
-        body: { query: query.trim(), category }
+        body: { 
+          query: userMessage.content, 
+          category,
+          conversationHistory 
+        }
       });
 
       if (error) throw error;
 
-      setAnalysis(data.analysis);
-      toast({
-        title: "تم التحليل القانوني",
-        description: "تم إنتاج التحليل القانوني بنجاح"
-      });
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: data.analysis,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
 
     } catch (error) {
       console.error('Error getting legal analysis:', error);
@@ -61,10 +86,10 @@ const SimpleLegalConsultation = () => {
 
   const detectLegalCategory = (text: string) => {
     const keywords = {
-      civil: ['عقد', 'إيجار', 'بيع', 'شراء', 'ملكية', 'تعويض'],
-      criminal: ['جريمة', 'سرقة', 'قتل', 'اعتداء', 'جنائي'],
+      family: ['طلاق', 'نفقة', 'حضانة', 'زواج', 'ميراث', 'خلع', 'زوج', 'زوجة'],
+      civil: ['عقد', 'إيجار', 'بيع', 'شراء', 'ملكية', 'تعويض', 'دين'],
+      criminal: ['جريمة', 'سرقة', 'قتل', 'اعتداء', 'جنائي', 'حبس'],
       commercial: ['شركة', 'تجارة', 'إفلاس', 'شيك'],
-      family: ['طلاق', 'نفقة', 'حضانة', 'زواج', 'ميراث'],
       labor: ['عمل', 'فصل', 'راتب', 'إجازة'],
     };
 
@@ -73,11 +98,11 @@ const SimpleLegalConsultation = () => {
         return category;
       }
     }
-    return 'civil'; // default
+    return 'civil';
   };
 
-  const handleTextToSpeech = async () => {
-    if (!analysis) return;
+  const handleTextToSpeech = async (text: string) => {
+    if (!text) return;
 
     if (isPlaying && audioRef.current) {
       audioRef.current.pause();
@@ -93,7 +118,7 @@ const SimpleLegalConsultation = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke('text-to-speech', {
-        body: { text: analysis }
+        body: { text }
       });
 
       if (error) throw error;
@@ -122,6 +147,17 @@ const SimpleLegalConsultation = () => {
     }
   };
 
+  const handleNewChat = () => {
+    setMessages([]);
+    setQuery("");
+    setAudioUrl("");
+    setIsPlaying(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+  };
+
   const handleFileSelect = () => {
     fileInputRef.current?.click();
   };
@@ -136,23 +172,95 @@ const SimpleLegalConsultation = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8">
       <div className="container mx-auto px-4 max-w-4xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            المستشار القانوني المصري
-          </h1>
-          <p className="text-muted-foreground">
-            تحليل قانوني عميق وفقاً للقانون المصري
-          </p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">
+              مستشارك القانوني
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              نموذج ذكاء اصطناعي متخصص في القانون المصري
+            </p>
+          </div>
+          {messages.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewChat}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              محادثة جديدة
+            </Button>
+          )}
         </div>
 
+        {/* Messages */}
+        {messages.length > 0 && (
+          <div className="space-y-4 mb-6 max-h-[500px] overflow-y-auto">
+            {messages.map((message, index) => (
+              <Card 
+                key={index} 
+                className={`p-4 ${
+                  message.role === 'user' 
+                    ? 'bg-primary/5 border-primary/20' 
+                    : 'bg-muted/50'
+                }`}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {message.role === 'user' ? 'أنت' : 'المستشار القانوني'}
+                    </p>
+                    <div className="text-foreground whitespace-pre-line text-right" dir="rtl">
+                      {message.content}
+                    </div>
+                  </div>
+                  {message.role === 'assistant' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleTextToSpeech(message.content)}
+                      className="rounded-full ml-2"
+                    >
+                      {isPlaying ? (
+                        <Square className="h-4 w-4" />
+                      ) : (
+                        <Volume2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            ))}
+            {isLoading && (
+              <Card className="p-4 bg-muted/50">
+                <p className="text-xs text-muted-foreground mb-2">المستشار القانوني</p>
+                <div className="flex items-center gap-2">
+                  <div className="animate-pulse">جاري التحليل القانوني...</div>
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
+
         {/* Input Section */}
-        <Card className="p-6 mb-6 shadow-lg">
-          <div className="space-y-4">
+        <Card className="p-4 shadow-lg">
+          <div className="space-y-3">
             <Textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="اكتب استشارتك القانونية هنا بالتفصيل..."
-              className="min-h-[150px] text-right resize-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+              placeholder={
+                messages.length === 0 
+                  ? "اكتب استشارتك القانونية هنا..."
+                  : "اكتب سؤالك التالي..."
+              }
+              className="min-h-[100px] text-right resize-none"
               dir="rtl"
             />
             
@@ -197,43 +305,14 @@ const SimpleLegalConsultation = () => {
                 onClick={handleSubmit}
                 disabled={isLoading || !query.trim()}
                 size="lg"
-                className="px-8"
+                className="px-6"
               >
-                {isLoading ? "جاري التحليل..." : "تحليل"}
+                {isLoading ? "جاري التحليل..." : "إرسال"}
                 <Send className="w-4 h-4 mr-2" />
               </Button>
             </div>
           </div>
         </Card>
-
-        {/* Analysis Result */}
-        {analysis && (
-          <Card className="p-6 shadow-lg animate-in fade-in slide-in-from-bottom-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-foreground">
-                التحليل القانوني
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleTextToSpeech}
-                className="rounded-full"
-              >
-                {isPlaying ? (
-                  <Square className="h-4 w-4" />
-                ) : (
-                  <Volume2 className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-            
-            <div className="prose prose-sm max-w-none text-right" dir="rtl">
-              <div className="whitespace-pre-line text-foreground/90 leading-relaxed">
-                {analysis}
-              </div>
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   );
