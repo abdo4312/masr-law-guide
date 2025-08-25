@@ -96,7 +96,7 @@ serve(async (req) => {
         'X-Title': 'Egyptian Legal Advisor'
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.2-3b-instruct:free',
+        model: 'anthropic/claude-3.5-sonnet:beta',
         messages: [
           {
             role: 'system',
@@ -107,9 +107,9 @@ serve(async (req) => {
             content: query
           }
         ],
-        temperature: 0.3,
-        max_tokens: 500,
-        top_p: 0.9
+        temperature: 0.2,
+        max_tokens: 2000,
+        top_p: 0.95
       }),
     });
 
