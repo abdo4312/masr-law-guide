@@ -76,13 +76,13 @@ ${continueMode ? '- أكمل من حيث توقفت في الرد السابق �
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${OPENROUTER_API_KEY || 'free'}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://your-site.com',
         'X-Title': 'Egyptian Legal Advisor'
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.2-3b-instruct:free',
+        model: 'google/gemma-2-9b-it:free',
         messages: messages,
         temperature: 0.3,
         max_tokens: 800,
