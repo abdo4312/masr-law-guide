@@ -15,7 +15,7 @@ serve(async (req) => {
   }
 
   try {
-    const { query, category, conversationHistory = [] } = await req.json();
+    const { query, category, conversationHistory = [], continueMode = false } = await req.json();
 
     if (!query || !category) {
       return new Response(
@@ -33,6 +33,7 @@ serve(async (req) => {
 - ركز على الحل العملي للمشكلة
 - استخدم لغة بسيطة يفهمها غير المتخصصين
 - لا تبدأ بتعريف نفسك
+${continueMode ? '- أكمل من حيث توقفت في الرد السابق دون تكرار' : ''}
 
 القوانين المصرية المرجعية:
 - القانون المدني رقم 131 لسنة 1948

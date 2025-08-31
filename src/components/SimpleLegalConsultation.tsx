@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Mic, Plus, Send, Volume2, Square, Trash2 } from "lucide-react";
+import { Mic, Plus, Send, Volume2, Square, Trash2, Copy, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -10,6 +10,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  isIncomplete?: boolean;
 }
 
 const SimpleLegalConsultation = () => {
@@ -22,8 +23,8 @@ const SimpleLegalConsultation = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const handleSubmit = async () => {
-    if (!query.trim()) {
+  const handleSubmit = async (continueFromLast = false) => {
+    if (!continueFromLast && !query.trim()) {
       toast({
         title: "خطأ",
         description: "يرجى كتابة استشارتك القانونية",
@@ -32,21 +33,35 @@ const SimpleLegalConsultation = () => {
       return;
     }
 
-    const userMessage: Message = {
-      role: 'user',
-      content: query,
-      timestamp: new Date()
-    };
+    let userMessage: Message;
+    let queryToSend: string;
+    
+    if (continueFromLast) {
+      // Continue from last incomplete message
+      queryToSend = "أكمل";
+      userMessage = {
+        role: 'user',
+        content: queryToSend,
+        timestamp: new Date()
+      };
+    } else {
+      queryToSend = query;
+      userMessage = {
+        role: 'user',
+        content: query,
+        timestamp: new Date()
+      };
+      setQuery("");
+    }
 
     setMessages(prev => [...prev, userMessage]);
-    setQuery("");
     setIsLoading(true);
     setAudioUrl("");
     setIsPlaying(false);
     
     try {
       // Auto-detect legal category
-      const category = detectLegalCategory(query);
+      const category = detectLegalCategory(queryToSend);
       
       // Prepare conversation history
       const conversationHistory = messages.map(msg => ({
@@ -56,18 +71,27 @@ const SimpleLegalConsultation = () => {
       
       const { data, error } = await supabase.functions.invoke('legal-analysis', {
         body: { 
-          query: userMessage.content, 
+          query: queryToSend, 
           category,
-          conversationHistory 
+          conversationHistory,
+          continueMode: continueFromLast
         }
       });
 
       if (error) throw error;
 
+      // Check if response is incomplete (ends mid-sentence)
+      const isIncomplete = data.analysis && (
+        data.analysis.endsWith('...') ||
+        data.analysis.length >= 490 || // Near token limit
+        !data.analysis.match(/[.!؟]$/) // Doesn't end with punctuation
+      );
+
       const assistantMessage: Message = {
         role: 'assistant',
         content: data.analysis,
-        timestamp: new Date()
+        timestamp: new Date(),
+        isIncomplete
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -82,6 +106,21 @@ const SimpleLegalConsultation = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({
+        title: "تم النسخ",
+        description: "تم نسخ النص بنجاح",
+      });
+    }).catch(() => {
+      toast({
+        title: "خطأ",
+        description: "فشل نسخ النص",
+        variant: "destructive"
+      });
+    });
   };
 
   const detectLegalCategory = (text: string) => {
@@ -209,32 +248,55 @@ const SimpleLegalConsultation = () => {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="text-xs text-muted-foreground mb-2">
-                      {message.role === 'user' ? 'أنت' : 'المستشار القانوني'}
+                      {message.role === 'user' ? 'أنت' : 'فريدة المساعدة القانونية'}
                     </p>
                     <div className="text-foreground whitespace-pre-line text-right" dir="rtl">
                       {message.content}
                     </div>
                   </div>
                   {message.role === 'assistant' && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleTextToSpeech(message.content)}
-                      className="rounded-full ml-2"
-                    >
-                      {isPlaying ? (
-                        <Square className="h-4 w-4" />
-                      ) : (
-                        <Volume2 className="h-4 w-4" />
-                      )}
-                    </Button>
+                    <div className="flex gap-1 ml-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleCopy(message.content)}
+                        className="rounded-full"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleTextToSpeech(message.content)}
+                        className="rounded-full"
+                      >
+                        {isPlaying ? (
+                          <Square className="h-4 w-4" />
+                        ) : (
+                          <Volume2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
                   )}
                 </div>
+                {message.isIncomplete && index === messages.length - 1 && !isLoading && (
+                  <div className="mt-3 flex justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSubmit(true)}
+                      className="gap-2"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                      متابعة
+                    </Button>
+                  </div>
+                )}
               </Card>
             ))}
             {isLoading && (
               <Card className="p-4 bg-muted/50">
-                <p className="text-xs text-muted-foreground mb-2">المستشار القانوني</p>
+                <p className="text-xs text-muted-foreground mb-2">فريدة المساعدة القانونية</p>
                 <div className="flex items-center gap-2">
                   <div className="animate-pulse">جاري التحليل القانوني...</div>
                 </div>
@@ -302,7 +364,7 @@ const SimpleLegalConsultation = () => {
               </div>
               
               <Button
-                onClick={handleSubmit}
+                onClick={() => handleSubmit(false)}
                 disabled={isLoading || !query.trim()}
                 size="lg"
                 className="px-6"
